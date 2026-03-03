@@ -85,8 +85,8 @@ class DriverStateTracker:
         self.summary_interval_seconds = 10 * 60 # 10 minutes
         
         # Settings
-        self.warning_threshold = 1.5  # seconds EAR < thresh to WARNING
-        self.drowsy_threshold = 3.0   # seconds EAR < thresh to DROWSY
+        self.warning_threshold = 1.0  # seconds EAR < thresh to WARNING
+        self.drowsy_threshold = 2.0   # seconds EAR < thresh to DROWSY
         self.ear_threshold = 0.25 # Default
         
         # Track when EAR went below threshold for exact transition timing

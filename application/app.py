@@ -71,7 +71,8 @@ class App(ctk.CTk):
             return
         self._is_playing_sound = True
         def _play():
-            sound_path = "/Users/arnavposwal/CascadeProjects/driver_drowsiness_detection/mi-gente-sountec-live-edit.mp3"
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            sound_path = os.path.join(base_dir, "mi-gente-sountec-live-edit.mp3")
             try:
                 if sys.platform == "darwin":
                     # macOS natively supports mp3 via afplay

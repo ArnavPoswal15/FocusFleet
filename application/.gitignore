@@ -1,4 +1,63 @@
-.DS_Store
-venv
-__pycache__
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# C extensions
+*.so
+
+# Distribution / packaging
+bin/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+*.spec
+
+# PyInstaller
+#  Usually these files are written by a python script, before a portable
+#  executable is created.
+*.manifest
+*.spec
+
+# SQLite databases
+*.db
+driver.db
+
+# Large Model files
+*.keras
+*.h5
 driver_drowsiness_model.keras
+
+# Logs
+logs/
+*.log
+
+# Virtual Environments
+venv/
+env/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+
+# macOS
+.DS_Store
+
+# Audio (optional, but good to keep out of repo if large)
+*.mp3
+mi-gente-sountec-live-edit.mp3
