@@ -83,6 +83,20 @@ The cloud version is located in the `FocusFleet/` directory and is optimized for
 
 ---
 
+## System Architecture & Data Flow
+
+![FocusFleet Data Flow Diagram](assets/data_flow.png)
+
+The application's data pipeline processes raw video frames through a multi-stage analysis:
+- **Preprocessing**: OpenCV handles frame capture and initial transformation.
+- **Landmark Extraction**: MediaPipe identifies 468 3D facial landmarks.
+- **Biometric Metrics**: Eye Aspect Ratio (EAR) and yawning frequency (MAR) are calculated in real-time.
+- **Deep Learning**: A MobileNetV2-based CNN provides secondary verification of the driver's state.
+- **Decision Engine**: Flattens multiple inputs into actionable states (ACTIVE, WARNING, DROWSY).
+- **Outputs**: Triggers UI updates, audio alerts, and persistent logging to SQLite.
+
+---
+
 ## 📊 Detection Logic
 
 The system follows a tiered detection approach:
