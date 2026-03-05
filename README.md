@@ -4,7 +4,6 @@ FocusFleet is a production-ready AI-powered Driver Drowsiness Detection applicat
 
 ---
 
-
 ## 🌟 Key Features
 
 - **Real-time Monitoring**: High-performance video stream processing with non-blocking UI
