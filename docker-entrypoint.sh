@@ -21,7 +21,10 @@ seed_asset() {
 
 seed_asset "driver_drowsiness_model.keras"
 seed_asset "mi-gente-sountec-live-edit.mp3"
-seed_asset "driver.db"
+# Only seed driver.db when not using Space admin secrets (avoids stale DB blocking admin login).
+if [[ -z "${FOCUSFLEET_ADMIN_USERNAME:-}" || -z "${FOCUSFLEET_ADMIN_PASSWORD:-}" ]]; then
+  seed_asset "driver.db"
+fi
 
 HAAR_DST="${DATA_DIR}/haarcascade_frontalface_default.xml"
 if [[ ! -f "${HAAR_DST}" ]]; then

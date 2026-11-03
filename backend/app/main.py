@@ -79,7 +79,20 @@ def on_startup() -> None:
     admin_user = os.getenv("FOCUSFLEET_ADMIN_USERNAME", "").strip()
     admin_pass = os.getenv("FOCUSFLEET_ADMIN_PASSWORD", "")
     if admin_user and admin_pass:
-        ensure_admin_account(admin_user, hash_password(admin_pass))
+        try:
+            if ensure_admin_account(admin_user, hash_password(admin_pass)):
+                print(f"[FocusFleet] Admin account ready for login: {admin_user!r}")
+            else:
+                print("[FocusFleet] Admin bootstrap failed (empty username or hash).")
+        except Exception as exc:
+            print(f"[FocusFleet] Admin bootstrap error: {exc}")
+    else:
+        missing = []
+        if not admin_user:
+            missing.append("FOCUSFLEET_ADMIN_USERNAME")
+        if not admin_pass:
+            missing.append("FOCUSFLEET_ADMIN_PASSWORD")
+        print(f"[FocusFleet] Admin bootstrap skipped (set Space secrets: {', '.join(missing)})")
 
 
 @app.get("/api/health")

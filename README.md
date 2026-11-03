@@ -1,37 +1,209 @@
-# FocusFleet: Driver Drowsiness Detection
+# FocusFleet
 
-FocusFleet monitors driver alertness with computer vision (MediaPipe landmarks, EAR/MAR heuristics, and an optional Keras classifier). It is aimed at fleets and safety workflows that need a clear audit trail and a path from a working demo to a self-hosted product—not hype, but a stack you can run locally and deploy incrementally.
+Driver drowsiness detection for fleets and demos: **MediaPipe** landmarks, EAR/yawn heuristics, optional **Keras** classifier, session logs, and a **Next.js + FastAPI** web app.
 
-**Product shape today:** a static **Next.js** console, a **FastAPI** backend for auth/sessions/analytics and live monitoring, and a shared **`focusfleet`** CV core. The public **Hugging Face Space** runs the same stack in a **Docker** container (`sdk: docker`, port **7860**); local Gradio under `web/` remains available for parity testing.
+**Live demo (Docker Space):** [huggingface.co/spaces/ArnavPoswal15/FocusFleet](https://huggingface.co/spaces/ArnavPoswal15/FocusFleet)
 
-Diagram and layer notes: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Architecture details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · Docker / Space env: [web/README-DOCKER.md](web/README-DOCKER.md)
 
 ---
 
-## Architecture
+## Architecture (at a glance)
 
-| Component | Location | Responsibility |
+**Live Space (one container, port 7860):**
+
+```
+                    ┌─────────────────────────────────┐
+                    │           Browser               │
+                    │  login · dashboard · monitoring │
+                    │  analytics · admin (/admin)     │
+                    └───────────────┬─────────────────┘
+                                    │ same URL (HTTPS)
+                                    ▼
+┌───────────────────────────────────────────────────────────────────┐
+│              Hugging Face Docker Space (:7860)                     │
+│  ┌─────────────────────┐      ┌─────────────────────────────┐   │
+│  │ Next.js static UI   │      │ FastAPI (Uvicorn)            │   │
+│  │ served from /app/out│◄────►│ /api/auth · sessions · admin │   │
+│  └─────────────────────┘      │ /ws/monitoring/{session}     │   │
+│                                └──────────────┬───────────────┘   │
+│                                               ▼                   │
+│                                ┌─────────────────────────────┐   │
+│                                │ focusfleet (CV + logging)    │   │
+│                                │ MediaPipe · EAR · yawn · ML  │   │
+│                                └──────────────┬───────────────┘   │
+│                                               ▼                   │
+│                                /data  SQLite · logs · model · mp3  │
+└───────────────────────────────────────────────────────────────────┘
+         ▲
+         │  git push main  ──►  GitHub Action (HF_TOKEN)  ──►  sync + rebuild
+    GitHub repo
+```
+
+**Local dev:** `frontend :3000` ──proxy `/api`──► `backend :8000` ──► `focusfleet/` + `web/` data.
+
+Full diagrams (monitoring sequence, detection pipeline): **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
+
+---
+
+## Architecture (Mermaid)
+
+Renders on GitHub and in Mermaid-aware editors. Plain-text diagrams stay in the section above and in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#diagrams-for-reading-plain-text).
+
+### Production (Hugging Face Space)
+
+```mermaid
+flowchart TB
+  subgraph user["Browser"]
+    UI["Next.js static pages<br/>/login · /dashboard · /monitoring · /admin"]
+  end
+
+  subgraph space["HF Docker Space port 7860"]
+    Uvicorn["Uvicorn · FastAPI"]
+    Static["Static files /app/out"]
+    API["REST /api/*"]
+    WS["WebSocket /ws/monitoring/session_id"]
+    CV["focusfleet + DetectionService"]
+    Data["/data · SQLite · logs · model · audio"]
+    Uvicorn --> Static
+    Uvicorn --> API
+    Uvicorn --> WS
+    API --> CV
+    WS --> CV
+    API --> Data
+    CV --> Data
+  end
+
+  UI -->|"same origin · Bearer token"| API
+  UI -->|"WebSocket and access_token"| WS
+  UI --> Static
+```
+
+### Local development
+
+```mermaid
+flowchart LR
+  subgraph dev["Local machine"]
+    NextDev["Next dev :3000<br/>proxies /api → :8000"]
+    API["FastAPI :8000"]
+    FF["focusfleet/"]
+    WebData["web/ · driver.db · model paths"]
+    NextDev --> API
+    API --> FF
+    API --> WebData
+    FF --> WebData
+  end
+
+  Browser["Browser"] --> NextDev
+```
+
+### GitHub → Hugging Face sync
+
+```mermaid
+flowchart LR
+  GH["GitHub main"]
+  Action["GitHub Action<br/>HF_TOKEN"]
+  SpaceRepo["HF Space git repo"]
+  Build["Docker build on HF"]
+  Run["Running Space"]
+
+  GH -->|"push synced paths"| Action
+  Action -->|"rsync + commit"| SpaceRepo
+  SpaceRepo --> Build --> Run
+```
+
+More diagrams: [live monitoring sequence](docs/ARCHITECTURE.md#4-live-monitoring-product-path) · [detection pipeline](docs/ARCHITECTURE.md#5-detection-pipeline-shared) · [full architecture](docs/ARCHITECTURE.md).
+
+---
+
+## What’s in this repo
+
+| Part | Folder | Purpose |
 | --- | --- | --- |
-| **Next.js (static export)** | `frontend/` | Dashboard, monitoring UI, analytics, settings. `output: "export"` for static hosting. |
-| **FastAPI** | `backend/` | REST auth/sessions/analytics; WebSocket monitoring; CORS for `localhost:3000`. |
-| **`focusfleet` CV library** | `focusfleet/` | Detection, state machine, SQLite helpers, Gradio UI module. |
-| **HF Docker Space** | `Dockerfile`, `backend/`, `frontend/`, `runtime-assets/` | Builds Next + FastAPI image; syncs to [ArnavPoswal15/FocusFleet](https://huggingface.co/spaces/ArnavPoswal15/FocusFleet). See [`web/README-DOCKER.md`](web/README-DOCKER.md). |
-| **Gradio (local / legacy)** | `web/` | Optional Gradio entry (`web/main.py`) for HF-parity CV testing. |
-| **Desktop (legacy)** | `application/` | CustomTkinter app; same concepts, separate copy of engine/logger. |
+| Web UI | `frontend/` | Next.js (static export): login, dashboard, monitoring, analytics, admin |
+| API | `backend/` | FastAPI: auth, sessions, analytics, WebSocket monitoring |
+| CV core | `focusfleet/` | Detection, state machine, shared config |
+| HF deploy | `Dockerfile`, `docker-entrypoint.sh`, `runtime-assets/` | Single container on port **7860** |
+| Local Gradio | `web/` | Optional CV/UI testing (`web/main.py`) |
+| Legacy desktop | `application/` | CustomTkinter (older copy) |
 
-**Data flow (target product path):** browser → Next static app → FastAPI (`/api/*`, `/ws/monitoring/{session_id}`) → `focusfleet.detection` / `DetectionService`.
-
-**Data flow (Space path):** browser webcam → Gradio in `focusfleet.ui.app` → `process_frame` / `classify_image` in `focusfleet.detection`.
+**Flow:** Browser → Next UI → `/api/*` and `/ws/monitoring/{session_id}` → `focusfleet` detection.
 
 ---
 
-## Local development
+## Deploy to Hugging Face (GitHub → Space)
 
-Use separate terminals from the repo root. Python **3.10+** recommended (match HF Space: 3.10.13).
+### One-time setup
 
-### Gradio web app (HF-parity)
+1. **GitHub:** Settings → Secrets → Actions → add **`HF_TOKEN`** (Hugging Face [write token](https://huggingface.co/settings/tokens)).
+2. **Space:** Settings → Secrets → add:
+   - **`FOCUSFLEET_SECRET_KEY`** — long random string (keeps logins valid after restarts)
+   - **`FOCUSFLEET_ADMIN_USERNAME`** — admin login name
+   - **`FOCUSFLEET_ADMIN_PASSWORD`** — admin login password  
+   Secret names must match **exactly**.
+3. Optional: put large files in the Space repo under **`runtime-assets/`** (Git LFS): `driver_drowsiness_model.keras`, alert `.mp3`.
 
-Runs the same layout as the Space; good for CV/UI changes without the Next stack.
+### Every release
+
+```bash
+git add -A && git commit -m "feat: …" && git push origin main
+```
+
+- GitHub Action **Sync to Hugging Face Space** runs on pushes that touch `focusfleet/`, `backend/`, `frontend/`, `Dockerfile`, etc.
+- Or run locally: `./scripts/sync-huggingface-space.sh`
+- On Hugging Face, wait for **Building** → **Running**. Use **Factory rebuild** after secret changes.
+
+### After deploy
+
+1. Open the Space URL → **`/login/`** (home redirects to login).
+2. **Drivers:** Register → dashboard / monitoring.
+3. **Admins:** Sign in with Space secrets → **`/admin/`** (fleet overview, drivers, logs).
+4. In **Logs**, look for: `[FocusFleet] Admin account ready for login: '…'`
+
+You do **not** configure separate frontend/backend URLs on the Space: one URL serves UI + API. Auth uses a **Bearer token** in the browser (cookies are unreliable inside HF’s iframe).
+
+More env vars: [web/README-DOCKER.md](web/README-DOCKER.md).
+
+---
+
+## Run locally (full stack)
+
+Python **3.10+** recommended. Use **three terminals** from the repo root.
+
+### 1. Backend
+
+```bash
+cd backend
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+export FOCUSFLEET_ADMIN_USERNAME=admin
+export FOCUSFLEET_ADMIN_PASSWORD='your-local-password'
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+Check: [http://127.0.0.1:8000/api/health](http://127.0.0.1:8000/api/health)
+
+### 2. Frontend
+
+Create `frontend/.env.local`:
+
+```env
+NEXT_PUBLIC_USE_MOCK=false
+NEXT_PUBLIC_API_BASE=
+NEXT_PUBLIC_WS_URL=ws://127.0.0.1:8000
+```
+
+Empty `NEXT_PUBLIC_API_BASE` proxies `/api` through Next dev server to port 8000.
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) → login.
+
+### 3. Optional: Gradio only (CV work)
 
 ```bash
 cd web
@@ -40,190 +212,55 @@ pip install -r requirements.txt
 python main.py
 ```
 
-Open the URL Gradio prints (typically `http://127.0.0.1:7860`).
-
-### Backend API
-
-Expects the monorepo layout so `focusfleet` and `web/` (DB, model path) resolve correctly.
-
-```bash
-cd backend
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-Health check: `GET http://localhost:8000/api/health`
-
-Optional: `FOCUSFLEET_CORS_ORIGINS=http://localhost:3000` (comma-separated).
-
-#### Fleet admin account
-
-Admins share the same login page as drivers (`/login/`). The first admin is created on API startup when env vars are set (not via `/register`):
-
-```bash
-export FOCUSFLEET_ADMIN_USERNAME=admin
-export FOCUSFLEET_ADMIN_PASSWORD='choose-a-strong-password'
-cd backend && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-After sign-in, admins are redirected to `/admin/` (fleet overview, driver list, session logs). Drivers still use `/dashboard/` and cannot call `/api/admin/*`.
-
-See [`backend/.env.example`](backend/.env.example) for a safe template (placeholders only).
-
-#### Hugging Face Space (live app)
-
-**Requires the Docker Space** (`sdk: docker` — see [`web/README-DOCKER.md`](web/README-DOCKER.md)). The legacy Gradio Space does not serve `/login/` or `/admin/` and does not read admin env vars on startup. Sync from GitHub with `./scripts/sync-huggingface-space.sh`, then Factory rebuild.
-
-The Docker Space runs the same FastAPI startup hook: it reads **`FOCUSFLEET_ADMIN_USERNAME`** and **`FOCUSFLEET_ADMIN_PASSWORD`** from the container environment.
-
-1. Open your Space → **Settings** → **Repository secrets** (or **Secrets**).
-2. Add **`FOCUSFLEET_ADMIN_USERNAME`** — any username you want (e.g. `fleet-admin`).
-3. Add **`FOCUSFLEET_ADMIN_PASSWORD`** — a strong password you choose (not checked into GitHub).
-4. **Factory rebuild** or restart the Space so the new env vars are injected before Uvicorn starts.
-5. Visit the Space URL → **`/login/`**, sign in with those credentials. Admins go to **`/admin/`**; drivers still use **`/register`** and **`/dashboard/`**.
-
-Bootstrap runs only when SQLite has **no** admin row yet (typical on a fresh Space volume). If an admin already exists, changing secrets does not reset the password—clear or replace the DB under `FOCUSFLEET_DATA_DIR` only if you intentionally want to re-bootstrap.
-
-More Docker env details: [`web/README-DOCKER.md`](web/README-DOCKER.md).
-
-### Frontend (Next.js dev)
-
-Defaults to mock data unless you point it at the API:
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000). To use the real backend:
-
-```bash
-NEXT_PUBLIC_USE_MOCK=false NEXT_PUBLIC_API_BASE=http://localhost:8000 npm run dev
-```
-
-Production-style static build: `npm run build` (output in `frontend/out/`).
-
-### Desktop app (optional)
-
-```bash
-cd application
-python -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-python app.py
-```
-
 ---
 
-## Performance and benchmarks
+## Roles
 
-Formal benchmarks are not checked in yet. Use this section as a template when you add numbers.
-
-| Scenario | Target (TBD) | Notes |
+| Role | Sign up | After login |
 | --- | --- | --- |
-| Gradio live stream | _ms/frame @ 720p_ | `stream_every=0.08` caps callback rate (~12.5 Hz). |
-| FastAPI WebSocket monitoring | _ms/frame + JSON overhead_ | Client sends JPEG frames; server runs `DetectionService`. |
-| Cold start (HF Space) | _seconds_ | TensorFlow + model load on first request. |
-| Static Next deploy | _First Contentful Paint_ | Static export; no SSR. |
+| **Driver** | `/register/` | `/dashboard/`, `/monitoring/` |
+| **Admin** | Not via register — env / Space secrets | `/admin/` |
 
-When publishing results, record hardware, Python/TF versions, `driver_drowsiness_model.keras` loaded or not, and camera resolution.
+Local admin: set `FOCUSFLEET_ADMIN_USERNAME` / `FOCUSFLEET_ADMIN_PASSWORD` before starting the backend (see [backend/.env.example](backend/.env.example)).
 
 ---
 
-## Gradio streaming hotfix and migration
+## Features
 
-**Hotfix:** In `focusfleet/ui/app.py`, the live webcam uses `webcam_input.stream(..., stream_every=0.08, concurrency_limit=2)`. Gradio 6’s streaming API otherwise invokes the frame handler too aggressively, which can stall the UI and overload inference on CPU Spaces. The status banner is decoupled via `gr.Timer(1)` so alerts do not flicker every frame.
+- Live webcam monitoring with annotated frames and status (active → warning → drowsy)
+- Configurable EAR threshold; yawn detection; optional Keras check
+- Alert audio after sustained drowsy/distraction (see `focusfleet/config.py`)
+- SQLite sessions and analytics; admin fleet view and session logs
 
-**Migration path:**
-
-1. **Now:** Ship CV fixes in `focusfleet/`; validate on local Gradio (`web/main.py`) and sync to HF.
-2. **Next:** Drive monitoring from the Next app via FastAPI WebSocket (`backend/app/api/websocket.py`) and shared detection code—same thresholds and state machine, product UX in `frontend/`.
-3. **Deploy:** Host static `frontend/out/` on any static host; run FastAPI beside it; keep the Space as a public demo or fallback until WebSocket monitoring is parity-tested.
-
-Legacy `web/engine.py` / duplicated files under `application/` should converge on `focusfleet/` over time; treat `focusfleet` as the single source for detection behavior.
+Detection code: `focusfleet/detection.py`, `focusfleet/state.py`, `focusfleet/session_logger.py`.
 
 ---
 
-## Key features
-
-- Real-time webcam monitoring with annotated frames and status states (ACTIVE → WARNING → DROWSY → FACE_LOST)
-- EAR/MAR heuristics plus optional Keras validation
-- Session logging on state transitions (not every frame)
-- Driver registration/login (SQLite)
-- Image upload classification tab (Gradio)
-- Dual surface: HF Gradio Space + Next/FastAPI product shell
-
----
-
-## Project structure
+## Project layout
 
 ```
 FocusFleet/
-├── focusfleet/          # Shared CV, config, state, DB, Gradio UI
-├── backend/             # FastAPI application
-├── frontend/            # Next.js static export UI
-├── web/                 # HF Space entry + requirements
-├── application/         # Legacy CustomTkinter desktop app
-├── docs/                # Architecture notes
-└── scripts/             # HF Space sync helper
+├── focusfleet/       # Shared CV + config
+├── backend/          # FastAPI
+├── frontend/         # Next.js
+├── web/              # Gradio + Docker Space README frontmatter source
+├── scripts/          # sync-huggingface-space.sh
+├── Dockerfile
+└── docs/
 ```
 
 ---
 
-## Tech stack
+## Hugging Face sync (reference)
 
-- **Python:** OpenCV, MediaPipe, TensorFlow/Keras, FastAPI, Gradio
-- **Frontend:** Next.js 15, React 19, Tailwind
-- **Data:** SQLite (`web/driver.db` when using backend/Gradio paths)
-- **Deploy:** Static Next + FastAPI on one host, or HF Space (**Docker** SDK, Python 3.10.13, `FOCUSFLEET_DATA_DIR` for SQLite/logs/model)
+**Synced from GitHub:** `focusfleet/`, `backend/`, `frontend/` (sources, not `out/`), `Dockerfile`, `docker-entrypoint.sh`, runtime assets from `runtime-assets/` or selected files under `web/`.
 
----
+**Not synced:** local `web/logs/`, `.venv`, `node_modules`, your `frontend/.env.local`.
 
-## Detection logic (summary)
-
-1. MediaPipe Face Mesh landmarks → EAR and mouth metrics  
-2. State machine with persistent thresholds → WARNING / DROWSY  
-3. Optional Keras pass on cropped face regions  
-4. Audio/visual alerts and session logs on transitions  
-
-Details live in `focusfleet/detection.py`, `focusfleet/state.py`, and `focusfleet/session_logger.py`.
-
----
-
-## Configuration
-
-- **Model:** `web/driver_drowsiness_model.keras` (large; often Git LFS on HF, not always in GitHub)
-- **Alert audio:** `mi-gente-sountec-live-edit.mp3` under `web/` (and desktop copy)
-- **Dependencies:** `web/requirements.txt`, `backend/requirements.txt`, `application/requirements.txt`
-
----
-
-## Hugging Face Space sync
-
-**Source of truth:** `focusfleet/`, `backend/`, `frontend/` (source, not `out/`), root `Dockerfile`, `docker-entrypoint.sh`, and runtime assets (`runtime-assets/` or files under `web/` such as the alert MP3 and optional `.keras` / `driver.db`).
-
-1. **CI:** set GitHub secret `HF_TOKEN`. Pushes to `main` that touch synced paths run `.github/workflows/sync-huggingface.yml` (Space README is copied from `web/README-DOCKER.md`).
-2. **Manual:** `./scripts/sync-huggingface-space.sh` (clone at `~/Desktop/huggingface/FocusFleet` or set `HF_SPACE_DIR`).
-
-The sync script does not use `--delete`; large LFS assets on the Space (for example `runtime-assets/driver_drowsiness_model.keras`) are kept even when absent from GitHub.
-
-**Runtime data:** in Docker, set **`FOCUSFLEET_DATA_DIR`** (default `/data`) for writable SQLite, logs, and seeded model/audio. Details: [`web/README-DOCKER.md`](web/README-DOCKER.md).
-
-**Live Space:** [https://huggingface.co/spaces/ArnavPoswal15/FocusFleet](https://huggingface.co/spaces/ArnavPoswal15/FocusFleet)
-
-**Admin on live:** set Space secrets `FOCUSFLEET_ADMIN_USERNAME` and `FOCUSFLEET_ADMIN_PASSWORD`, rebuild, then log in at `/login/` (step-by-step under [Fleet admin account](#fleet-admin-account) → Hugging Face Space).
+**Manual clone path (script default):** `~/Desktop/huggingface/FocusFleet`
 
 ---
 
 ## License
 
-MIT License.
-
----
-
-## Support
-
-1. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for system layout  
-2. `focusfleet/` and `backend/app/` for API and detection behavior  
-3. Per-app READMEs under `web/`, `frontend/`, and `application/` where present  
+MIT

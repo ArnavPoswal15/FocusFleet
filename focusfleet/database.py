@@ -51,26 +51,25 @@ def init_db() -> None:
         conn.close()
 
 
-def ensure_admin_account(username: str, password_hash: str) -> None:
-    """Insert bootstrap admin if no admin row exists."""
+def ensure_admin_account(username: str, password_hash: str) -> bool:
+    """Create or update the fleet admin from env (Space secrets). Returns True if synced."""
     name = username.strip()
     if not name or not password_hash:
-        return
+        return False
 
     conn = sqlite3.connect(config.DB_NAME)
     try:
         _ensure_role_column(conn)
-        existing_admin = conn.execute(
-            "SELECT 1 FROM Driver WHERE Role=? LIMIT 1", (ROLE_ADMIN,)
+        row = conn.execute(
+            "SELECT DriverID, Role FROM Driver WHERE Name=? LIMIT 1", (name,)
         ).fetchone()
-        if existing_admin:
-            return
-
-        name_taken = conn.execute(
-            "SELECT 1 FROM Driver WHERE Name=? LIMIT 1", (name,)
-        ).fetchone()
-        if name_taken:
-            return
+        if row:
+            conn.execute(
+                "UPDATE Driver SET Password=?, Role=? WHERE Name=?",
+                (password_hash, ROLE_ADMIN, name),
+            )
+            conn.commit()
+            return True
 
         conn.execute(
             "INSERT INTO Driver (Name, Password, ContactInfo, LicenseNumber, Role) "
@@ -78,6 +77,7 @@ def ensure_admin_account(username: str, password_hash: str) -> None:
             (name, password_hash, ROLE_ADMIN),
         )
         conn.commit()
+        return True
     finally:
         conn.close()
 

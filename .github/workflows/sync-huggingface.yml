@@ -1,11 +1,11 @@
-# Mirrors Docker Space layout to Hugging Face on push to main.
+# Mirrors Docker Space layout to Hugging Face on push to main or master.
 # Add repository secret HF_TOKEN (write token): https://huggingface.co/settings/tokens
 
 name: Sync to Hugging Face Space
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
     paths:
       - "focusfleet/**"
       - "backend/**"

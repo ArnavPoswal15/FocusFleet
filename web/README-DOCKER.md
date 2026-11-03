@@ -37,7 +37,7 @@ This Hugging Face Space runs the monorepo **FastAPI backend** and **static Next.
 
 ### Admin login on the Space
 
-Set **`FOCUSFLEET_ADMIN_USERNAME`** and **`FOCUSFLEET_ADMIN_PASSWORD`** as [Space secrets](https://huggingface.co/docs/hub/spaces-overview#managing-secrets) (Settings → Secrets). On container startup, FastAPI creates the first admin if the database has no admin row yet. Sign in at **`/login/`** on the Space URL; admins are redirected to **`/admin/`**. Use values you choose—never commit real passwords to git. After adding or changing secrets, **Factory rebuild** or restart the Space so the container picks them up. Template: [`backend/.env.example`](../backend/.env.example).
+Set **`FOCUSFLEET_ADMIN_USERNAME`** and **`FOCUSFLEET_ADMIN_PASSWORD`** as [Space secrets](https://huggingface.co/docs/hub/spaces-overview#managing-secrets) (Settings → Secrets). Names must match exactly. On each container start, the API **creates or updates** that user as **`admin`** (password synced from the secret). Sign in at **`/login/`**; admins go to **`/admin/`**. After adding or changing secrets, **Factory rebuild** or restart the Space. Check **Logs** for `[FocusFleet] Admin account ready for login: 'yourname'`.
 
 On startup, files missing under `FOCUSFLEET_DATA_DIR` are copied from `/app/runtime-assets/` (and legacy `/app/` paths) so large LFS assets can live in the Space repo without rebuilding the image layer every sync.
 
