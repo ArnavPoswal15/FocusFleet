@@ -39,6 +39,31 @@ def _resolve_static_file(relative: str) -> Path | None:
     return None
 
 
+# Next `output: "export"` only pre-renders placeholder dynamic segments (see generateStaticParams).
+_ADMIN_DRIVER_DETAIL_SHELL = "admin/drivers/0"
+_ADMIN_SESSION_LOG_SHELL = "admin/drivers/0/sessions/00000000_000000"
+
+
+def _dynamic_export_shell(relative: str) -> Path | None:
+    """Serve pre-built shells for admin dynamic routes so the client router keeps the URL."""
+    parts = relative.strip("/").split("/")
+    if (
+        len(parts) >= 5
+        and parts[0] == "admin"
+        and parts[1] == "drivers"
+        and parts[3] == "sessions"
+    ):
+        return _resolve_static_file(_ADMIN_SESSION_LOG_SHELL)
+    if (
+        len(parts) == 3
+        and parts[0] == "admin"
+        and parts[1] == "drivers"
+        and parts[2].isdigit()
+    ):
+        return _resolve_static_file(_ADMIN_DRIVER_DETAIL_SHELL)
+    return None
+
+
 class _StripApiTrailingSlashMiddleware(BaseHTTPMiddleware):
     """Frontend static export may call `/api/foo/`; FastAPI routes are `/api/foo`."""
 
@@ -114,8 +139,14 @@ async def serve_frontend(full_path: str) -> FileResponse:
         raise HTTPException(status_code=404, detail="Not found")
 
     resolved = _resolve_static_file(normalized)
+    if resolved is None:
+        resolved = _dynamic_export_shell(normalized)
     if resolved is not None:
         return FileResponse(resolved)
+
+    not_found = STATIC_DIR / "404.html"
+    if not_found.is_file():
+        return FileResponse(not_found, status_code=404)
 
     index = STATIC_DIR / "index.html"
     if index.is_file():
