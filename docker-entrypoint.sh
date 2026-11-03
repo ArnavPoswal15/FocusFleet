@@ -23,6 +23,18 @@ seed_asset "driver_drowsiness_model.keras"
 seed_asset "mi-gente-sountec-live-edit.mp3"
 seed_asset "driver.db"
 
+HAAR_DST="${DATA_DIR}/haarcascade_frontalface_default.xml"
+if [[ ! -f "${HAAR_DST}" ]]; then
+  HAAR_SRC="$(python -c "import cv2, os; print(os.path.join(cv2.data.haarcascades, 'haarcascade_frontalface_default.xml'))")"
+  if [[ -f "${HAAR_SRC}" ]]; then
+    cp "${HAAR_SRC}" "${HAAR_DST}"
+  else
+    curl -fsSL -o "${HAAR_DST}" \
+      "https://raw.githubusercontent.com/opencv/opencv/4.x/data/haarcascades/haarcascade_frontalface_default.xml"
+  fi
+fi
+export FOCUSFLEET_HAAR_CASCADE="${HAAR_DST}"
+
 export FOCUSFLEET_DATA_DIR="${DATA_DIR}"
 export PYTHONPATH="/app/backend:/app:${PYTHONPATH:-}"
 

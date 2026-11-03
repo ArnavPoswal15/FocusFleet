@@ -29,7 +29,9 @@ if os.path.exists(config.MODEL_PATH):
     except Exception as e:
         print(f"Warning: Could not load model from {config.MODEL_PATH}: {e}")
 
-_haar_cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+_haar_cascade_path = os.environ.get("FOCUSFLEET_HAAR_CASCADE") or (
+    cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+)
 _face_cascade = cv2.CascadeClassifier(_haar_cascade_path)
 
 _face_mesh = mp.solutions.face_mesh.FaceMesh(
