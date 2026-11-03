@@ -167,6 +167,15 @@ CREATE TABLE Driver (
 - **SDK**: Gradio 6.8.0
 - **Auto-rebuild**: Triggered on main branch pushes
 
+### Keeping GitHub and Hugging Face in sync
+
+**Source of truth:** edit the web app under `web/` in this GitHub repo only. The Space repo is a flat copy of that folder (not the whole monorepo).
+
+1. **Automatic (recommended):** add a GitHub repository secret `HF_TOKEN` ([Hugging Face write token](https://huggingface.co/settings/tokens)). Pushes to `main` that touch `web/` run `.github/workflows/sync-huggingface.yml` and update the Space.
+2. **Manual:** from the repo root, run `./scripts/sync-huggingface-space.sh` (requires a local clone at `~/Desktop/huggingface/FocusFleet`, or set `HF_SPACE_DIR`).
+
+The sync script does **not** delete large files on the Space (for example `driver_drowsiness_model.keras`) if they are not in GitHub; keep the model on HF via Git LFS there.
+
 ---
 
 ## 🤝 Development & Contributing
