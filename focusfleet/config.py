@@ -5,6 +5,8 @@ Keeping every constant here means detection tuning, DB location, and UI
 copy can all be changed in one place without touching logic elsewhere.
 """
 
+import os
+
 # ── Database ────────────────────────────────────────────────────────────
 DB_NAME = "driver.db"
 
@@ -25,8 +27,14 @@ EAR_THRESHOLD_MAX = 0.50
 EAR_THRESHOLD_STEP = 0.01
 
 MOUTH_THRESHOLD_RATIO = 0.08  # fraction of frame height counted as a yawn
-DROWSY_CONFIRM_SECS = 2.0     # seconds of sustained drowsy signal before alarm
-FRAME_DISPLAY_SIZE = (640, 480)
+DROWSY_CONFIRM_SECS = 2.0     # UI banner: sustained drowsy signal before “drowsy” state
+ALERT_SOUND_AFTER_SECS = float(
+    os.environ.get("FOCUSFLEET_ALERT_SOUND_AFTER_SECS", "8.0")
+)  # alert audio after this many seconds drowsy (low EAR / yawn) or distracted (no face)
+FRAME_DISPLAY_SIZE = (
+    int(os.environ.get("FOCUSFLEET_FRAME_W", "480")),
+    int(os.environ.get("FOCUSFLEET_FRAME_H", "360")),
+)
 
 # ── Status keys used across detection + UI ─────────────────────────────
 STATUS_ALERT = "alert"

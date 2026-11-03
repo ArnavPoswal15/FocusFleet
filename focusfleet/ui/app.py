@@ -94,6 +94,8 @@ def build_app() -> gr.Blocks:
                 fn=process_frame,
                 inputs=[webcam_input, ear_threshold_slider],
                 outputs=[detection_output],
+                stream_every=0.08,
+                concurrency_limit=2,
             )
 
             # Slow loop: 1 Hz banner refresh, decoupled from frame rate.

@@ -1,4 +1,4 @@
-# Mirrors web/ to the Hugging Face Space on every push to main.
+# Mirrors Docker Space layout to Hugging Face on push to main.
 # Add repository secret HF_TOKEN (write token): https://huggingface.co/settings/tokens
 
 name: Sync to Hugging Face Space
@@ -7,7 +7,13 @@ on:
   push:
     branches: [main]
     paths:
+      - "focusfleet/**"
+      - "backend/**"
+      - "frontend/**"
       - "web/**"
+      - "runtime-assets/**"
+      - "Dockerfile"
+      - "docker-entrypoint.sh"
       - "scripts/sync-huggingface-space.sh"
       - ".github/workflows/sync-huggingface.yml"
   workflow_dispatch:
@@ -36,16 +42,51 @@ jobs:
         run: |
           git clone "https://ArnavPoswal15:${HF_TOKEN}@huggingface.co/spaces/ArnavPoswal15/FocusFleet" hf-space
 
-      - name: Sync web/ to Space root
+      - name: Sync monorepo to Space (Docker layout)
         run: |
-          rsync -av \
-            --exclude='.git/' \
-            --exclude='__pycache__/' \
-            --exclude='.DS_Store' \
-            --exclude='venv/' \
-            --exclude='*.code-workspace' \
-            --exclude='.hf-sync-meta.json' \
-            web/ hf-space/
+          set -euo pipefail
+          mkdir -p hf-space/runtime-assets
+
+          RSYNC_EXCLUDES=(
+            --exclude='.git/'
+            --exclude='__pycache__/'
+            --exclude='.DS_Store'
+            --exclude='venv/'
+            --exclude='*.code-workspace'
+            --exclude='.hf-sync-meta.json'
+            --exclude='node_modules/'
+            --exclude='.next/'
+            --exclude='out/'
+          )
+
+          rsync -av "${RSYNC_EXCLUDES[@]}" focusfleet/ hf-space/focusfleet/
+          rsync -av "${RSYNC_EXCLUDES[@]}" backend/ hf-space/backend/
+          rsync -av "${RSYNC_EXCLUDES[@]}" frontend/ hf-space/frontend/
+          rsync -av Dockerfile docker-entrypoint.sh hf-space/
+
+          if [ -d runtime-assets ] && [ -n "$(ls -A runtime-assets 2>/dev/null)" ]; then
+            rsync -av runtime-assets/ hf-space/runtime-assets/
+          elif [ -f web/mi-gente-sountec-live-edit.mp3 ]; then
+            rsync -av web/mi-gente-sountec-live-edit.mp3 hf-space/runtime-assets/
+          fi
+          if [ -f web/driver_drowsiness_model.keras ]; then
+            rsync -av web/driver_drowsiness_model.keras hf-space/runtime-assets/
+          fi
+          if [ -f web/driver.db ]; then
+            rsync -av web/driver.db hf-space/runtime-assets/
+          fi
+          if [ -f web/.gitattributes ]; then
+            rsync -av web/.gitattributes hf-space/
+          fi
+          if [ -f web/README-DOCKER.md ]; then
+            cp web/README-DOCKER.md hf-space/README.md
+          fi
+
+          for asset in driver_drowsiness_model.keras mi-gente-sountec-live-edit.mp3 driver.db; do
+            if [ -f "hf-space/${asset}" ] && [ ! -f "hf-space/runtime-assets/${asset}" ]; then
+              mv "hf-space/${asset}" "hf-space/runtime-assets/${asset}"
+            fi
+          done
 
       - name: Commit and push to Hugging Face
         working-directory: hf-space
@@ -54,8 +95,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # Always refresh metadata so a workflow run creates an HF commit (and Space rebuild)
-          # even when web/ content already matches the Space.
           printf '{"github_sha":"%s","github_ref":"%s","synced_at":"%s","source":"github-actions"}\n' \
             "$GITHUB_SHA" "$GITHUB_REF" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > .hf-sync-meta.json
           git add -A
@@ -63,5 +102,5 @@ jobs:
             echo "::warning::No file changes after sync; this should not happen."
             exit 1
           fi
-          git commit -m "chore: sync web/ from GitHub ${GITHUB_SHA}"
+          git commit -m "chore: sync Docker Space from GitHub ${GITHUB_SHA}"
           git push "https://ArnavPoswal15:${HF_TOKEN}@huggingface.co/spaces/ArnavPoswal15/FocusFleet" main

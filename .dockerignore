@@ -1,0 +1,15 @@
+.git
+.github
+.cursor
+**/__pycache__
+**/*.pyc
+**/.DS_Store
+**/node_modules
+frontend/.next
+frontend/out
+application
+web/venv
+**/.venv
+**/venv
+**/*.code-workspace
+hf-space
