@@ -37,11 +37,6 @@ function resolveApiBase(): string {
 
 const API_BASE = resolveApiBase();
 
-/** Next.js `trailingSlash: true` redirects bare paths; keep API calls on the slash URL. */
-function withTrailingSlash(path: string): string {
-  return path.endsWith("/") ? path : `${path}/`;
-}
-
 export type ApiError = {
   message: string;
   status?: number;
@@ -93,7 +88,7 @@ function dashboardFromSummary(summary: AnalyticsSummary): DashboardStat[] {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(`${API_BASE}${withTrailingSlash(path)}`, {
+    res = await fetch(`${API_BASE}${path}`, {
       credentials: "include",
       ...init,
       headers: {

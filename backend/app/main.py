@@ -6,6 +6,8 @@ import app.path_setup  # noqa: F401 — repo root on sys.path
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
 
 from app.api import admin, analytics, auth, sessions, websocket
 from app.core.security import hash_password
@@ -37,7 +39,23 @@ def _resolve_static_file(relative: str) -> Path | None:
     return None
 
 
+class _StripApiTrailingSlashMiddleware(BaseHTTPMiddleware):
+    """Frontend static export may call `/api/foo/`; FastAPI routes are `/api/foo`."""
+
+    async def dispatch(self, request: Request, call_next):
+        path = request.scope.get("path", "")
+        if (
+            (path.startswith("/api/") or path.startswith("/ws/"))
+            and path.endswith("/")
+            and len(path) > 1
+        ):
+            request.scope["path"] = path.rstrip("/")
+        return await call_next(request)
+
+
 app = FastAPI(title="FocusFleet API", version="0.1.0")
+
+app.add_middleware(_StripApiTrailingSlashMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
