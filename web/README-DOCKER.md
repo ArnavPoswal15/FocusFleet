@@ -29,6 +29,7 @@ This Hugging Face Space runs the monorepo **FastAPI backend** and **static Next.
 | `FOCUSFLEET_DATA_DIR` | `/data` | Writable directory for SQLite DB, logs, and copied model/audio assets |
 | `FOCUSFLEET_STATIC_DIR` | `/app/out` | Built Next.js static export (set in `Dockerfile`) |
 | `FOCUSFLEET_SECRET_KEY` | random per process | Session cookie signing |
+| `FOCUSFLEET_COOKIE_SECURE` | `true` in Docker entrypoint | `Secure` session cookies (required for HF iframe) |
 | `FOCUSFLEET_CORS_ORIGINS` | `http://localhost:3000` | Comma-separated origins if you split frontend/API |
 | `FOCUSFLEET_ADMIN_USERNAME` | _(unset)_ | Bootstrap fleet admin username (see below) |
 | `FOCUSFLEET_ADMIN_PASSWORD` | _(unset)_ | Bootstrap fleet admin password (pair with username) |

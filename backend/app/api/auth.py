@@ -1,10 +1,10 @@
-import os
 import sqlite3
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
 from app.core.config import SESSION_COOKIE_NAME, SESSION_MAX_AGE_SECONDS
+from app.core.cookies import session_cookie_params
 from app.core.deps import get_current_user
 from app.core.security import create_session_token, hash_password, verify_password
 from focusfleet import config
@@ -36,14 +36,15 @@ def _user_from_row(row: tuple) -> dict:
     }
 
 
-def _set_session_cookie(response: Response, driver_id: int, name: str, role: str) -> None:
+def _set_session_cookie(response: Response, request: Request, driver_id: int, name: str, role: str) -> None:
     token = create_session_token({"driver_id": driver_id, "name": name, "role": role})
+    flags = session_cookie_params(request)
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
         value=token,
         httponly=True,
-        secure=os.getenv("FOCUSFLEET_COOKIE_SECURE", "false").lower() == "true",
-        samesite="lax",
+        secure=flags["secure"],
+        samesite=flags["samesite"],
         max_age=SESSION_MAX_AGE_SECONDS,
         path="/",
     )
@@ -69,7 +70,7 @@ def register(body: RegisterBody) -> dict:
 
 
 @router.post("/login")
-def login(body: LoginBody, response: Response) -> dict:
+def login(body: LoginBody, request: Request, response: Response) -> dict:
     conn = sqlite3.connect(config.DB_NAME)
     try:
         row = conn.execute("SELECT * FROM Driver WHERE Name=?", (body.name,)).fetchone()
@@ -80,7 +81,7 @@ def login(body: LoginBody, response: Response) -> dict:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
     user = _user_from_row(row)
-    _set_session_cookie(response, user["driver_id"], user["name"], user["role"])
+    _set_session_cookie(response, request, user["driver_id"], user["name"], user["role"])
     return {"user": user}
 
 
@@ -97,6 +98,12 @@ def me(user: dict = Depends(get_current_user)) -> dict:
 
 
 @router.post("/logout")
-def logout(response: Response) -> dict:
-    response.delete_cookie(SESSION_COOKIE_NAME, path="/")
+def logout(request: Request, response: Response) -> dict:
+    flags = session_cookie_params(request)
+    response.delete_cookie(
+        SESSION_COOKIE_NAME,
+        path="/",
+        secure=flags["secure"],
+        samesite=flags["samesite"],
+    )
     return {"message": "Logged out"}

@@ -96,6 +96,10 @@ async def serve_frontend(full_path: str) -> FileResponse:
     if not normalized:
         normalized = "index.html"
 
+    lower = normalized.lower()
+    if lower.startswith(".") or lower.endswith(".env") or ".env" in lower:
+        raise HTTPException(status_code=404, detail="Not found")
+
     resolved = _resolve_static_file(normalized)
     if resolved is not None:
         return FileResponse(resolved)

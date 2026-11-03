@@ -52,6 +52,9 @@ export FOCUSFLEET_HAAR_CASCADE="${HAAR_DST}"
 
 export FOCUSFLEET_DATA_DIR="${DATA_DIR}"
 export PYTHONPATH="/app/backend:/app:${PYTHONPATH:-}"
+# HTTPS iframe (Hugging Face Spaces) needs Secure cookies unless overridden.
+export FOCUSFLEET_COOKIE_SECURE="${FOCUSFLEET_COOKIE_SECURE:-true}"
 
 cd "${DATA_DIR}"
-exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT}" --app-dir /app/backend
+exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT}" --app-dir /app/backend \
+  --proxy-headers --forwarded-allow-ips='*'
