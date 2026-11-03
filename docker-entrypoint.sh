@@ -25,13 +25,28 @@ seed_asset "driver.db"
 
 HAAR_DST="${DATA_DIR}/haarcascade_frontalface_default.xml"
 if [[ ! -f "${HAAR_DST}" ]]; then
-  HAAR_SRC="$(python -c "import cv2, os; print(os.path.join(cv2.data.haarcascades, 'haarcascade_frontalface_default.xml'))")"
-  if [[ -f "${HAAR_SRC}" ]]; then
-    cp "${HAAR_SRC}" "${HAAR_DST}"
-  else
-    curl -fsSL -o "${HAAR_DST}" \
-      "https://raw.githubusercontent.com/opencv/opencv/4.x/data/haarcascades/haarcascade_frontalface_default.xml"
-  fi
+  python - "${DATA_DIR}" <<'PY'
+import os
+import shutil
+import sys
+import urllib.request
+
+data_dir = sys.argv[1]
+dst = os.path.join(data_dir, "haarcascade_frontalface_default.xml")
+try:
+    import cv2
+    src = os.path.join(cv2.data.haarcascades, "haarcascade_frontalface_default.xml")
+    if os.path.isfile(src):
+        shutil.copy(src, dst)
+    else:
+        raise FileNotFoundError(src)
+except Exception:
+    url = (
+        "https://raw.githubusercontent.com/opencv/opencv/4.x/data/haarcascades/"
+        "haarcascade_frontalface_default.xml"
+    )
+    urllib.request.urlretrieve(url, dst)
+PY
 fi
 export FOCUSFLEET_HAAR_CASCADE="${HAAR_DST}"
 
