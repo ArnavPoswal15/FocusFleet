@@ -20,7 +20,9 @@ class AppState:
     tracker: object | None = None  # DriverStateTracker, set on login
 
     drowsy_since: float | None = None
+    impaired_since: float | None = None  # start of sustained drowsy / no-face (distraction)
     current_status_key: str = config.STATUS_NEUTRAL
+    last_frame_metrics: dict = field(default_factory=dict)
 
 
 STATE = AppState()

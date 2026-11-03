@@ -1,2 +1,43 @@
+# OS / editor
 .DS_Store
 *.code-workspace
+.idea/
+.vscode/
+
+# Python virtual environments (never commit)
+.venv/
+venv/
+**/.venv/
+**/venv/
+venv.bak/
+
+# Python bytecode / caches
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# Local env and secrets
+.env
+.env.*
+!.env.example
+
+# Node / Next (also see frontend/.gitignore)
+node_modules/
+.next/
+out/
+
+# Runtime / local data (keep templates in repo if needed)
+web/logs/
+*.db
+driver_*.keras
+*.keras
+*.h5
+
+# HF sync clone (local only)
+hf-space/

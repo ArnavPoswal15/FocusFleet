@@ -8,6 +8,7 @@ Two entry points are used by the UI layer:
 """
 
 import os
+import subprocess
 import sys
 import threading
 import time
@@ -34,26 +35,79 @@ _face_cascade = cv2.CascadeClassifier(_haar_cascade_path)
 _face_mesh = mp.solutions.face_mesh.FaceMesh(
     static_image_mode=False,
     max_num_faces=1,
-    refine_landmarks=True,
+    refine_landmarks=False,
     min_detection_confidence=0.5,
     min_tracking_confidence=0.5,
 )
 
+_last_annotated_frame = None
+
+_alert_proc: subprocess.Popen | None = None
+_alert_lock = threading.Lock()
+_alert_active = False
+
+
+def _stop_alert_sound_unlocked() -> None:
+    global _alert_proc
+    if _alert_proc is not None and _alert_proc.poll() is None:
+        _alert_proc.terminate()
+        try:
+            _alert_proc.wait(timeout=0.3)
+        except subprocess.TimeoutExpired:
+            _alert_proc.kill()
+    _alert_proc = None
+
+
+def stop_alert_sound() -> None:
+    """Stop any in-progress alert audio."""
+    with _alert_lock:
+        _stop_alert_sound_unlocked()
+
 
 def play_alert_sound() -> None:
-    """Fire-and-forget audible alert; falls back to a console message."""
+    """Start alert audio once; no-op if already playing."""
+    global _alert_proc
+    if not os.path.exists(config.ALERT_SOUND_PATH):
+        print("ALERT SOUND: Drowsiness detected!")
+        return
 
-    def _play():
+    with _alert_lock:
+        if _alert_proc is not None and _alert_proc.poll() is None:
+            return
+        _stop_alert_sound_unlocked()
         try:
             if sys.platform == "darwin":
-                os.system(f'afplay "{config.ALERT_SOUND_PATH}"')
-            else:
+                _alert_proc = subprocess.Popen(
+                    ["afplay", config.ALERT_SOUND_PATH],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+            elif sys.platform == "win32":
                 import winsound
+
                 winsound.Beep(1000, 500)
+            else:
+                print("ALERT SOUND: Drowsiness detected!")
         except Exception:
             print("ALERT SOUND: Drowsiness detected!")
 
-    threading.Thread(target=_play, daemon=True).start()
+
+def _update_alert_sound(impaired: bool, now: float) -> None:
+    """Play alert after ALERT_SOUND_AFTER_SECS of drowsy or distracted; stop when clear."""
+    global _alert_active
+
+    if impaired:
+        if STATE.impaired_since is None:
+            STATE.impaired_since = now
+        sustained = (now - STATE.impaired_since) >= config.ALERT_SOUND_AFTER_SECS
+        if sustained and not _alert_active:
+            play_alert_sound()
+            _alert_active = True
+    else:
+        STATE.impaired_since = None
+        if _alert_active:
+            stop_alert_sound()
+            _alert_active = False
 
 
 def _euclidean(p1, p2) -> float:
@@ -87,6 +141,12 @@ def detect_drowsiness(frame, ear_threshold: float):
     if not results.multi_face_landmarks:
         cv2.putText(frame_disp, "No face detected", (20, 40),
                     cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA)
+        STATE.last_frame_metrics = {
+            "avg_ear": None,
+            "mouth_dist": None,
+            "is_yawning": False,
+            "face_detected": False,
+        }
         if STATE.tracker:
             STATE.tracker.update_state_v2(
                 ear_threshold, face_detected=False, is_yawning=False, metrics={}
@@ -123,6 +183,12 @@ def detect_drowsiness(frame, ear_threshold: float):
     x_min, y_min = int(min(xs) * w), int(min(ys) * h)
     x_max, y_max = int(max(xs) * w), int(max(ys) * h)
 
+    STATE.last_frame_metrics = {
+        "avg_ear": avg_ear,
+        "mouth_dist": mouth_distance,
+        "is_yawning": is_yawning,
+        "face_detected": True,
+    }
     if STATE.tracker:
         STATE.tracker.update_state_v2(
             ear_threshold,
@@ -130,8 +196,6 @@ def detect_drowsiness(frame, ear_threshold: float):
             is_yawning=is_yawning,
             metrics={"avg_ear": avg_ear, "mouth_dist": mouth_distance},
         )
-        if STATE.tracker.current_state.value == "DROWSY":
-            play_alert_sound()
 
     if drowsy_flag:
         label = f"Drowsy ({drowsy_pct:.1f}% drowsy, {not_drowsy_pct:.1f}% alert)"
@@ -152,10 +216,17 @@ def process_frame(frame, ear_threshold: float):
     """Stream handler used by the UI: runs detection and updates the
     debounced status key in shared state. Returns the annotated frame only
     (the status banner is read separately by a slower poller)."""
+    global _last_annotated_frame
+    if frame is None:
+        return _last_annotated_frame
+
     frame_out, status_str = detect_drowsiness(frame, ear_threshold)
 
     now = time.time()
     raw_drowsy = "DROWSINESS" in status_str or "Drowsy" in status_str
+    no_face = "No face" in status_str or "camera" in status_str.lower()
+    impaired = raw_drowsy or no_face
+    _update_alert_sound(impaired, now)
 
     if raw_drowsy:
         if STATE.drowsy_since is None:
@@ -164,9 +235,10 @@ def process_frame(frame, ear_threshold: float):
         STATE.current_status_key = config.STATUS_DROWSY if sustained else config.STATUS_WARNING
     else:
         STATE.drowsy_since = None
-        no_face = "No face" in status_str or "camera" in status_str.lower()
         STATE.current_status_key = config.STATUS_NO_FACE if no_face else config.STATUS_ALERT
 
+    if frame_out is not None:
+        _last_annotated_frame = frame_out
     return frame_out
 
 
