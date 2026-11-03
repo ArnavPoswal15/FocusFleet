@@ -8,45 +8,8 @@ Architecture details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · Docker / S
 
 ---
 
-## Architecture (at a glance)
 
-**Live Space (one container, port 7860):**
-
-```
-                    ┌─────────────────────────────────┐
-                    │           Browser               │
-                    │  login · dashboard · monitoring │
-                    │  analytics · admin (/admin)     │
-                    └───────────────┬─────────────────┘
-                                    │ same URL (HTTPS)
-                                    ▼
-┌───────────────────────────────────────────────────────────────────┐
-│              Hugging Face Docker Space (:7860)                     │
-│  ┌─────────────────────┐      ┌─────────────────────────────┐   │
-│  │ Next.js static UI   │      │ FastAPI (Uvicorn)            │   │
-│  │ served from /app/out│◄────►│ /api/auth · sessions · admin │   │
-│  └─────────────────────┘      │ /ws/monitoring/{session}     │   │
-│                                └──────────────┬───────────────┘   │
-│                                               ▼                   │
-│                                ┌─────────────────────────────┐   │
-│                                │ focusfleet (CV + logging)    │   │
-│                                │ MediaPipe · EAR · yawn · ML  │   │
-│                                └──────────────┬───────────────┘   │
-│                                               ▼                   │
-│                                /data  SQLite · logs · model · mp3  │
-└───────────────────────────────────────────────────────────────────┘
-         ▲
-         │  git push main  ──►  GitHub Action (HF_TOKEN)  ──►  sync + rebuild
-    GitHub repo
-```
-
-**Local dev:** `frontend :3000` ──proxy `/api`──► `backend :8000` ──► `focusfleet/` + `web/` data.
-
-Full diagrams (monitoring sequence, detection pipeline): **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
-
----
-
-## Architecture (Mermaid)
+## Architecture
 
 Renders on GitHub and in Mermaid-aware editors. Plain-text diagrams stay in the section above and in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#diagrams-for-reading-plain-text).
 
