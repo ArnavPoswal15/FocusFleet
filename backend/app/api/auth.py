@@ -36,8 +36,11 @@ def _user_from_row(row: tuple) -> dict:
     }
 
 
-def _set_session_cookie(response: Response, request: Request, driver_id: int, name: str, role: str) -> None:
-    token = create_session_token({"driver_id": driver_id, "name": name, "role": role})
+def _set_session_cookie(
+    response: Response,
+    request: Request,
+    token: str,
+) -> None:
     flags = session_cookie_params(request)
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
@@ -48,6 +51,18 @@ def _set_session_cookie(response: Response, request: Request, driver_id: int, na
         max_age=SESSION_MAX_AGE_SECONDS,
         path="/",
     )
+
+
+def _issue_session(
+    response: Response,
+    request: Request,
+    driver_id: int,
+    name: str,
+    role: str,
+) -> str:
+    token = create_session_token({"driver_id": driver_id, "name": name, "role": role})
+    _set_session_cookie(response, request, token)
+    return token
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
@@ -81,8 +96,10 @@ def login(body: LoginBody, request: Request, response: Response) -> dict:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
     user = _user_from_row(row)
-    _set_session_cookie(response, request, user["driver_id"], user["name"], user["role"])
-    return {"user": user}
+    access_token = _issue_session(
+        response, request, user["driver_id"], user["name"], user["role"]
+    )
+    return {"user": user, "access_token": access_token}
 
 
 @router.get("/me")

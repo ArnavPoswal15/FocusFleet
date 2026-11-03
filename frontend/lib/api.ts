@@ -37,6 +37,27 @@ function resolveApiBase(): string {
 
 const API_BASE = resolveApiBase();
 
+const SESSION_TOKEN_KEY = "focusfleet_access_token";
+
+export function getAccessToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(SESSION_TOKEN_KEY);
+}
+
+function setAccessToken(token: string | null): void {
+  if (typeof window === "undefined") return;
+  if (token) {
+    localStorage.setItem(SESSION_TOKEN_KEY, token);
+  } else {
+    localStorage.removeItem(SESSION_TOKEN_KEY);
+  }
+}
+
+function authHeaders(): Record<string, string> {
+  const token = getAccessToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 export type ApiError = {
   message: string;
   status?: number;
@@ -93,6 +114,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       ...init,
       headers: {
         "Content-Type": "application/json",
+        ...authHeaders(),
         ...init?.headers,
       },
     });
@@ -144,10 +166,11 @@ export const api = {
       mockSessionUser = { ...MOCK_DRIVER, name, driver_id: 1 };
       return { user: mockSessionUser };
     }
-    const data = await request<{ user: ApiUser }>("/api/auth/login", {
+    const data = await request<{ user: ApiUser; access_token: string }>("/api/auth/login", {
       method: "POST",
       body: JSON.stringify({ name, password }),
     });
+    setAccessToken(data.access_token);
     return data;
   },
 
@@ -181,7 +204,11 @@ export const api = {
       mockSessionUser = null;
       return { message: "ok" };
     }
-    return request<{ message: string }>("/api/auth/logout", { method: "POST" });
+    try {
+      return await request<{ message: string }>("/api/auth/logout", { method: "POST" });
+    } finally {
+      setAccessToken(null);
+    }
   },
 
   async getAnalytics(): Promise<AnalyticsData> {

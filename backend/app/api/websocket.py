@@ -5,7 +5,7 @@ import json
 
 import cv2
 import numpy as np
-from fastapi import APIRouter, Cookie, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Cookie, Query, WebSocket, WebSocketDisconnect
 
 from app.core.config import SESSION_COOKIE_NAME
 from app.core.security import read_session_token
@@ -32,8 +32,10 @@ async def monitoring_ws(
     websocket: WebSocket,
     session_id: str,
     focusfleet_session: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
+    access_token: str | None = Query(default=None),
 ):
-    user = read_session_token(focusfleet_session) if focusfleet_session else None
+    token = focusfleet_session or access_token
+    user = read_session_token(token) if token else None
     if not user:
         await websocket.close(code=4401)
         return

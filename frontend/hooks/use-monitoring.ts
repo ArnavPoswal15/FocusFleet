@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { API_BASE, USE_MOCK, api } from "@/lib/api";
+import { API_BASE, USE_MOCK, api, getAccessToken } from "@/lib/api";
 import {
   frameFromBackend,
   mockMonitoringClient,
@@ -53,7 +53,9 @@ export function useMonitoring(sessionId: string | null) {
       };
     }
 
-    const url = `${wsBase()}/ws/monitoring/${encodeURIComponent(sessionId)}`;
+    const token = getAccessToken();
+    const qs = token ? `?access_token=${encodeURIComponent(token)}` : "";
+    const url = `${wsBase()}/ws/monitoring/${encodeURIComponent(sessionId)}${qs}`;
     const client = new WebSocketClient({ url, reconnectMs: 2500 });
     clientRef.current = client;
     setConnection("connecting");
