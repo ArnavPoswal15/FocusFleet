@@ -1,0 +1,62 @@
+# Mirrors web/ to the Hugging Face Space on every push to main.
+# Add repository secret HF_TOKEN (write token): https://huggingface.co/settings/tokens
+
+name: Sync to Hugging Face Space
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - "scripts/sync-huggingface-space.sh"
+      - ".github/workflows/sync-huggingface.yml"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout GitHub repo
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Require HF token
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          if [ -z "${HF_TOKEN}" ]; then
+            echo "::error::Set repository secret HF_TOKEN (Hugging Face write token)."
+            exit 1
+          fi
+
+      - name: Clone Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git clone "https://ArnavPoswal15:${HF_TOKEN}@huggingface.co/spaces/ArnavPoswal15/FocusFleet" hf-space
+
+      - name: Sync web/ to Space root
+        run: |
+          rsync -av \
+            --exclude='.git/' \
+            --exclude='__pycache__/' \
+            --exclude='.DS_Store' \
+            --exclude='venv/' \
+            --exclude='*.code-workspace' \
+            web/ hf-space/
+
+      - name: Commit and push to Hugging Face
+        working-directory: hf-space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --staged --quiet; then
+            echo "No changes to push."
+            exit 0
+          fi
+          git commit -m "chore: sync web/ from GitHub ${GITHUB_SHA}"
+          git push "https://ArnavPoswal15:${HF_TOKEN}@huggingface.co/spaces/ArnavPoswal15/FocusFleet" main
