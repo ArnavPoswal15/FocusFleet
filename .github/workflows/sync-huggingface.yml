@@ -44,6 +44,7 @@ jobs:
             --exclude='.DS_Store' \
             --exclude='venv/' \
             --exclude='*.code-workspace' \
+            --exclude='.hf-sync-meta.json' \
             web/ hf-space/
 
       - name: Commit and push to Hugging Face
@@ -53,10 +54,14 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Always refresh metadata so a workflow run creates an HF commit (and Space rebuild)
+          # even when web/ content already matches the Space.
+          printf '{"github_sha":"%s","github_ref":"%s","synced_at":"%s","source":"github-actions"}\n' \
+            "$GITHUB_SHA" "$GITHUB_REF" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > .hf-sync-meta.json
           git add -A
           if git diff --staged --quiet; then
-            echo "No changes to push."
-            exit 0
+            echo "::warning::No file changes after sync; this should not happen."
+            exit 1
           fi
           git commit -m "chore: sync web/ from GitHub ${GITHUB_SHA}"
           git push "https://ArnavPoswal15:${HF_TOKEN}@huggingface.co/spaces/ArnavPoswal15/FocusFleet" main

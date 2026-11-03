@@ -54,6 +54,7 @@ rsync "${RSYNC_FLAGS[@]}" \
   --exclude='.DS_Store' \
   --exclude='venv/' \
   --exclude='*.code-workspace' \
+  --exclude='.hf-sync-meta.json' \
   "$WEB_DIR/" "$HF_DIR/"
 
 if $DRY_RUN || ! $PUSH; then
@@ -65,6 +66,8 @@ GITHUB_SHA="$(git -C "$REPO_ROOT" rev-parse --short HEAD 2>/dev/null || echo unk
 GITHUB_BRANCH="$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
 
 cd "$HF_DIR"
+printf '{"github_sha":"%s","github_ref":"%s","synced_at":"%s","source":"sync-huggingface-space.sh"}\n' \
+  "$GITHUB_SHA" "$GITHUB_BRANCH" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > .hf-sync-meta.json
 git add -A
 if git diff --staged --quiet; then
   echo "HF Space already matches web/ — nothing to commit."
